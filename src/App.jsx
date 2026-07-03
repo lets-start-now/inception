@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { AlertTriangle } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AppProvider } from './context/AppContext'
 import Layout from './components/Layout/Layout'
@@ -16,18 +17,17 @@ function AppRoutes() {
 
   if (authError && !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950 p-6">
-        <div className="max-w-md w-full bg-gray-900 border border-red-800 rounded-2xl p-6 text-center space-y-3">
-          <div className="text-4xl">⚠️</div>
-          <h1 className="text-xl font-bold text-red-300">Couldn’t reach the server</h1>
-          <p className="text-sm text-gray-400 break-words">{authError}</p>
-          <p className="text-xs text-gray-600">
-            Secure context: {String(window.isSecureContext)} · URL: {window.location.origin}
+      <div className="min-h-screen flex items-center justify-center bg-ink-950 p-6">
+        <div className="max-w-md w-full card text-center">
+          <div className="w-12 h-12 rounded-2xl bg-red-500/12 border border-red-500/25 flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle size={24} className="text-red-600" />
+          </div>
+          <h1 className="text-lg font-semibold text-ink-100">Couldn&apos;t reach the server</h1>
+          <p className="text-sm text-ink-400 mt-2 break-words">{authError}</p>
+          <p className="text-xs text-ink-600 mt-3">
+            Secure context: {String(window.isSecureContext)} · {window.location.origin}
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-2 px-4 py-2 rounded-lg bg-brand-700 hover:bg-brand-600 text-white text-sm font-semibold"
-          >
+          <button onClick={() => window.location.reload()} className="btn-primary w-full mt-5">
             Retry
           </button>
         </div>

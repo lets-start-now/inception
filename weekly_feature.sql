@@ -12,6 +12,11 @@ alter table public.tasks
 alter table public.app_settings
   add column if not exists min_weekly_points integer not null default 300;
 
+-- Recoverable flag for one-time tasks (see recoverable_feature.sql).
+--   false (default) = required to finish the day/week; true = optional if points met.
+alter table public.tasks
+  add column if not exists recoverable boolean not null default false;
+
 -- For a weekly task, daily_threshold is reused as the WEEKLY threshold
 -- (number of actions needed across the Mon–Sun week to complete it).
 
@@ -41,10 +46,12 @@ begin
   from public.app_settings where id = 1;
   v_min := coalesce(v_min, 100);
 
-  -- All active DAILY continuous tasks completed today?
+  -- Every REQUIRED active daily task completed today?
+  -- Required = all continuous tasks + any non-recoverable one-time task.
   select not exists (
     select 1 from public.tasks t
-    where t.type = 'continuous' and t.is_active = true and t.frequency = 'daily'
+    where t.is_active = true and t.frequency = 'daily'
+      and (t.type = 'continuous' or (t.type = 'one-time' and t.recoverable = false))
       and not exists (
         select 1 from public.task_logs l
         where l.user_id = p_user_id and l.log_date = p_date
@@ -61,19 +68,16 @@ begin
                 is_day_completed = excluded.is_day_completed,
                 updated_at       = now();
 
-  -- Refresh leader flag across ALL users for this date (handles ties)
-  select max(total_points) into v_max
+  -- Leader of the day = the #1-ranked user for the date, but ONLY if they
+  -- also completed the day. If the top scorer hasn't finished the day, there
+  -- is no leader. Ties at the top who all completed each get the flag.
+  select coalesce(max(total_points), 0) into v_max
   from public.daily_summaries where summary_date = p_date;
 
-  if v_max is not null and v_max > 0 then
-    update public.daily_summaries
-      set is_leader = (total_points = v_max), updated_at = now()
-      where summary_date = p_date;
-  else
-    update public.daily_summaries
-      set is_leader = false, updated_at = now()
-      where summary_date = p_date and is_leader = true;
-  end if;
+  update public.daily_summaries
+    set is_leader = (v_max > 0 and total_points = v_max and is_day_completed = true),
+        updated_at = now()
+    where summary_date = p_date;
 end;
 $$;
 

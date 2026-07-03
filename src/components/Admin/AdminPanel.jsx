@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Plus, Pencil, Trash2, Power, Inbox } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -13,7 +14,8 @@ export default function AdminPanel() {
   const [tab,       setTab]           = useState('tasks')
   const [editing,   setEditing]       = useState(null)
   const [creating,  setCreating]      = useState(false)
-  const [deleteId,  setDeleteId]      = useState(null)
+  const [deactivateId, setDeactivateId] = useState(null)  // soft: is_active=false
+  const [hardDeleteId, setHardDeleteId] = useState(null)  // permanent removal
   const [busy,      setBusy]          = useState(false)
   const [toast,     setToast]         = useState('')
   const [settings,  setSettings]      = useState({ min_daily_points: '100', min_weekly_points: '300' })
@@ -73,16 +75,39 @@ export default function AdminPanel() {
     refresh()
   }
 
-  // ── Delete task (soft: set is_active = false) ─────────────────
-  async function handleDelete() {
+  // ── Deactivate task (soft: set is_active = false) ─────────────
+  async function handleDeactivate() {
     setBusy(true)
     await supabase
       .from('tasks')
       .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('id', deleteId)
+      .eq('id', deactivateId)
     setBusy(false)
-    setDeleteId(null)
+    setDeactivateId(null)
     showToast('Task deactivated.')
+    loadAll()
+    refresh()
+  }
+
+  // ── Reactivate task ───────────────────────────────────────────
+  async function handleActivate(task) {
+    await supabase
+      .from('tasks')
+      .update({ is_active: true, updated_at: new Date().toISOString() })
+      .eq('id', task.id)
+    showToast('Task reactivated.')
+    loadAll()
+    refresh()
+  }
+
+  // ── Delete task permanently (hard: removes the row + its logs) ─
+  async function handleHardDelete() {
+    setBusy(true)
+    const { error } = await supabase.from('tasks').delete().eq('id', hardDeleteId)
+    setBusy(false)
+    setHardDeleteId(null)
+    if (error) { showToast('Error: ' + error.message); return }
+    showToast('Task permanently deleted.')
     loadAll()
     refresh()
   }
@@ -118,19 +143,17 @@ export default function AdminPanel() {
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-black">Admin Panel</h1>
-        <p className="text-gray-500 text-sm">Manage tasks, settings and users</p>
+        <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
+        <p className="text-ink-400 text-sm mt-1">Manage tasks, settings and users</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1 w-fit">
+      <div className="segmented">
         {['tasks', 'settings', 'users'].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
-              tab === t ? 'bg-amber-700/80 text-white' : 'text-gray-400 hover:text-gray-200'
-            }`}
+            className={`segmented-item ${tab === t ? 'segmented-item-active' : ''}`}
           >
             {t === 'tasks'    && `Tasks (${allTasks.length})`}
             {t === 'settings' && 'Settings'}
@@ -144,14 +167,14 @@ export default function AdminPanel() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <button className="btn-primary" onClick={() => { setCreating(true); setEditing(null) }}>
-              + New Task
+              <Plus size={16} /> New task
             </button>
           </div>
 
           {/* Create form */}
           {creating && (
-            <div className="card border-brand-700/60">
-              <h3 className="font-bold mb-4 text-brand-300">New Task</h3>
+            <div className="card border-accent-700/50 ring-1 ring-accent-500/10">
+              <h3 className="font-semibold mb-4 text-accent-700">New task</h3>
               <TaskForm
                 onSubmit={handleCreate}
                 onCancel={() => setCreating(false)}
@@ -166,7 +189,7 @@ export default function AdminPanel() {
               <div key={task.id}>
                 {editing?.id === task.id ? (
                   <div className="card border-amber-700/60">
-                    <h3 className="font-bold mb-4 text-amber-300">Edit Task</h3>
+                    <h3 className="font-bold mb-4 text-amber-700">Edit Task</h3>
                     <TaskForm
                       initial={task}
                       onSubmit={handleUpdate}
@@ -178,14 +201,18 @@ export default function AdminPanel() {
                   <AdminTaskRow
                     task={task}
                     onEdit={() => { setEditing(task); setCreating(false) }}
-                    onDelete={() => setDeleteId(task.id)}
+                    onToggleActive={() => task.is_active ? setDeactivateId(task.id) : handleActivate(task)}
+                    onDelete={() => setHardDeleteId(task.id)}
                   />
                 )}
               </div>
             ))}
             {allTasks.length === 0 && (
-              <div className="card text-center text-gray-500 py-10">
-                No tasks yet. Create one above.
+              <div className="card flex flex-col items-center text-center py-12">
+                <div className="w-12 h-12 rounded-xl bg-ink-800 flex items-center justify-center mb-3">
+                  <Inbox size={22} className="text-ink-500" />
+                </div>
+                <p className="text-sm text-ink-400">No tasks yet. Create one above.</p>
               </div>
             )}
           </div>
@@ -195,12 +222,13 @@ export default function AdminPanel() {
       {/* ── Settings tab ────────────────────────────────────────── */}
       {tab === 'settings' && (
         <div className="card max-w-md">
-          <h2 className="font-bold mb-4">App Settings</h2>
-          <form onSubmit={handleSaveSettings} className="space-y-4">
+          <h2 className="font-semibold mb-1">App settings</h2>
+          <p className="text-xs text-ink-500 mb-5">Completion thresholds for all users</p>
+          <form onSubmit={handleSaveSettings} className="space-y-5">
             <div>
-              <label className="label">Minimum Daily Points</label>
-              <p className="text-xs text-gray-500 mb-2">
-                Users must earn this many points to complete a day.
+              <label className="label">Minimum daily points</label>
+              <p className="hint mb-2 mt-0">
+                Points needed to complete a day.
               </p>
               <input
                 className="input"
@@ -217,9 +245,9 @@ export default function AdminPanel() {
               />
             </div>
             <div>
-              <label className="label">Minimum Weekly Points</label>
-              <p className="text-xs text-gray-500 mb-2">
-                Target for the separate weekly-tasks progress bar (Mon–Sun).
+              <label className="label">Minimum weekly points</label>
+              <p className="hint mb-2 mt-0">
+                Target for the weekly-tasks progress bar (Mon–Sun).
               </p>
               <input
                 className="input"
@@ -236,7 +264,7 @@ export default function AdminPanel() {
               />
             </div>
             <button className="btn-primary" type="submit" disabled={busy}>
-              {busy ? 'Saving…' : 'Save Settings'}
+              {busy ? 'Saving…' : 'Save settings'}
             </button>
           </form>
         </div>
@@ -244,27 +272,24 @@ export default function AdminPanel() {
 
       {/* ── Users tab ────────────────────────────────────────────── */}
       {tab === 'users' && (
-        <div className="card p-0 overflow-hidden">
+        <div className="card p-2">
           {users.map((u) => (
-            <div key={u.id} className="flex items-center justify-between px-5 py-3 border-b border-gray-800 last:border-0">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-sm font-bold">
+            <div key={u.id} className="flex items-center justify-between px-3 py-3 rounded-xl hover:bg-ink-800/60 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center text-sm font-semibold text-white shrink-0">
                   {u.username[0].toUpperCase()}
                 </div>
-                <div>
-                  <p className="font-medium text-sm">{u.username}</p>
-                  <p className="text-xs text-gray-500">{new Date(u.created_at).toLocaleDateString()}</p>
+                <div className="min-w-0">
+                  <p className="font-medium text-sm text-ink-100 truncate">{u.username}</p>
+                  <p className="text-xs text-ink-500">Joined {new Date(u.created_at).toLocaleDateString()}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <span className={u.role === 'admin' ? 'badge-amber' : 'badge-gray'}>
                   {u.role}
                 </span>
                 {u.id !== profile.id && (
-                  <button
-                    onClick={() => toggleRole(u)}
-                    className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded border border-gray-700 hover:border-gray-600 transition-colors"
-                  >
+                  <button onClick={() => toggleRole(u)} className="btn-ghost btn-sm">
                     Toggle role
                   </button>
                 )}
@@ -274,20 +299,31 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {/* Delete confirm */}
-      {deleteId && (
+      {/* Deactivate confirm (soft) */}
+      {deactivateId && (
         <ConfirmModal
           title="Deactivate Task"
-          message="This task will be hidden from users. Historical logs are preserved."
-          onConfirm={handleDelete}
-          onCancel={() => setDeleteId(null)}
+          message="This task will be hidden from users but kept in the database. Historical logs are preserved and you can reactivate it later."
+          onConfirm={handleDeactivate}
+          onCancel={() => setDeactivateId(null)}
+          danger
+        />
+      )}
+
+      {/* Hard delete confirm (permanent) */}
+      {hardDeleteId && (
+        <ConfirmModal
+          title="Permanently Delete Task"
+          message="This removes the task and ALL of its logs and streaks for every user. This cannot be undone. To just hide it, use Deactivate instead."
+          onConfirm={handleHardDelete}
+          onCancel={() => setHardDeleteId(null)}
           danger
         />
       )}
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white px-5 py-3 rounded-xl text-sm font-semibold shadow-xl animate-slide-up">
+        <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-ink-100 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-elevated animate-slide-up">
           {toast}
         </div>
       )}
@@ -295,42 +331,44 @@ export default function AdminPanel() {
   )
 }
 
-function AdminTaskRow({ task, onEdit, onDelete }) {
+function AdminTaskRow({ task, onEdit, onToggleActive, onDelete }) {
   return (
-    <div className={`card flex items-center gap-3 ${!task.is_active ? 'opacity-50' : ''}`}>
+    <div className={`card card-interactive flex flex-col sm:flex-row sm:items-center gap-3 ${!task.is_active ? 'opacity-60' : ''}`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold">{task.title}</span>
+          <span className="font-semibold text-ink-100">{task.title}</span>
           <span className={task.frequency === 'weekly' ? 'badge-blue' : 'badge-gray'}>
             {task.frequency ?? 'daily'}
           </span>
           <span className={task.type === 'one-time' ? 'badge-gray' : 'badge-purple'}>
             {task.type}
           </span>
+          {task.type === 'one-time' && (
+            <span className={task.recoverable ? 'badge-gray' : 'badge-amber'}>
+              {task.recoverable ? 'recoverable' : 'required'}
+            </span>
+          )}
           {!task.is_active && <span className="badge-gray">inactive</span>}
         </div>
         {task.description && (
-          <p className="text-xs text-gray-500 mt-0.5 truncate">{task.description}</p>
+          <p className="text-xs text-ink-500 mt-1 truncate">{task.description}</p>
         )}
-        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-          <span className="text-brand-400 font-mono">+{task.points_per_action} pts</span>
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-ink-500">
+          <span className="text-accent-600 font-medium tabular-nums">+{task.points_per_action} pts</span>
           {task.type === 'continuous' && (
             <span>threshold: {task.daily_threshold} / {task.frequency === 'weekly' ? 'week' : 'day'}</span>
           )}
         </div>
       </div>
       <div className="flex gap-2 shrink-0">
-        <button
-          onClick={onEdit}
-          className="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors"
-        >
-          Edit
+        <button onClick={onEdit} className="btn-secondary btn-sm">
+          <Pencil size={13} /> Edit
         </button>
-        <button
-          onClick={onDelete}
-          className="text-xs text-red-500 hover:text-red-400 px-3 py-1.5 rounded-lg border border-gray-700 hover:border-red-800 transition-colors"
-        >
-          Delete
+        <button onClick={onToggleActive} className="btn-ghost btn-sm">
+          <Power size={13} /> {task.is_active ? 'Deactivate' : 'Activate'}
+        </button>
+        <button onClick={onDelete} className="btn-danger-ghost btn-sm">
+          <Trash2 size={13} /> Delete
         </button>
       </div>
     </div>

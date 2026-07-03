@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Plus, Minus, Check, Loader2 } from 'lucide-react'
 
 export default function TaskCard({ task, log, onLog, onUndo }) {
   const [busyLog,  setBusyLog]  = useState(false)
@@ -7,6 +8,7 @@ export default function TaskCard({ task, log, onLog, onUndo }) {
   const isOneTime   = task.type === 'one-time'
   const isWeekly    = task.frequency === 'weekly'
   const period      = isWeekly ? 'week' : 'day'
+  const isRequired  = isOneTime && task.recoverable === false
   const count       = log?.action_count  ?? 0
   const points      = log?.points_earned ?? 0
   const isCompleted = log?.is_completed  ?? false
@@ -17,32 +19,23 @@ export default function TaskCard({ task, log, onLog, onUndo }) {
     : Math.min(100, Math.round((count / threshold) * 100))
 
   const canLog  = !(isOneTime && isCompleted)
-  const canUndo = count > 0 || isCompleted   // something to undo
+  const canUndo = count > 0 || isCompleted
 
-  async function handleLog() {
-    setBusyLog(true)
-    await onLog(task)
-    setBusyLog(false)
-  }
-
-  async function handleUndo() {
-    setBusyUndo(true)
-    await onUndo(task)
-    setBusyUndo(false)
-  }
+  async function handleLog()  { setBusyLog(true);  await onLog(task);  setBusyLog(false)  }
+  async function handleUndo() { setBusyUndo(true); await onUndo(task); setBusyUndo(false) }
 
   return (
-    <div className={`card transition-all ${isCompleted ? 'border-green-800/60 bg-green-950/10' : ''}`}>
+    <div className={`card p-4 transition-colors ${isCompleted ? 'border-emerald-200 bg-emerald-50/60' : 'card-interactive'}`}>
       <div className="flex items-start justify-between gap-3">
-
-        {/* ── Left: info ──────────────────────────────────────── */}
+        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold truncate">{task.title}</span>
+            <span className="font-semibold text-ink-100 truncate">{task.title}</span>
             {isWeekly && <span className="badge-blue">Weekly</span>}
-            {isCompleted && <span className="badge-green">✓ Done</span>}
+            {isRequired && !isCompleted && <span className="badge-amber">Required</span>}
+            {isCompleted && <span className="badge-green"><Check size={11} strokeWidth={3} /> Done</span>}
             {task.type === 'continuous' && !isCompleted && count > 0 && (
-              <span className="badge-amber">{count}/{threshold}</span>
+              <span className="badge-gray tabular-nums">{count}/{threshold}</span>
             )}
             {task.type === 'continuous' && count > threshold && (
               <span className="badge-purple">+{count - threshold} bonus</span>
@@ -50,80 +43,60 @@ export default function TaskCard({ task, log, onLog, onUndo }) {
           </div>
 
           {task.description && (
-            <p className="text-xs text-gray-500 mt-0.5 truncate">{task.description}</p>
+            <p className="text-xs text-ink-500 mt-1 truncate">{task.description}</p>
           )}
 
-          <div className="flex items-center gap-3 mt-2 flex-wrap">
-            <span className="text-xs text-gray-500">
+          <div className="flex items-center gap-x-3 gap-y-1 mt-2 flex-wrap text-xs">
+            <span className="text-ink-500">
               {isOneTime
                 ? (isWeekly ? 'Once / week' : 'Once / day')
                 : `${threshold} to complete · per ${period}`}
             </span>
-            <span className="text-xs font-mono text-brand-400">
-              +{task.points_per_action} pts/action
-            </span>
+            <span className="font-medium text-accent-600 tabular-nums">+{task.points_per_action} pts</span>
             {points > 0 && (
-              <span className="text-xs font-mono text-green-400">
-                {points} pts this {period}
-              </span>
+              <span className="font-medium text-emerald-600 tabular-nums">{points} pts this {period}</span>
             )}
           </div>
 
-          {/* Progress bar */}
-          <div className="mt-2.5 w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          {/* Progress */}
+          <div className="mt-3 track h-1.5">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                isCompleted ? 'bg-green-500' : 'bg-brand-500'
-              }`}
+              className={`h-full rounded-full transition-all duration-300 ${isCompleted ? 'bg-emerald-500' : 'bg-accent-500'}`}
               style={{ width: `${progressPct}%` }}
             />
           </div>
         </div>
 
-        {/* ── Right: undo + log buttons ────────────────────────── */}
+        {/* Actions */}
         <div className="flex items-center gap-1.5 shrink-0">
-
-          {/* Undo / − button */}
           <button
             onClick={handleUndo}
             disabled={!canUndo || busyUndo}
+            aria-label="Remove one action"
             title={isOneTime ? 'Undo completion' : 'Remove one action'}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg font-bold transition-all ${
-              canUndo
-                ? 'bg-gray-700 hover:bg-red-800/70 text-gray-300 hover:text-red-300 active:scale-95'
-                : 'bg-gray-800/40 text-gray-700 cursor-default'
-            }`}
+            className="w-9 h-9 rounded-lg flex items-center justify-center transition-all active:scale-95
+                       bg-ink-800 text-ink-300 hover:bg-red-500/15 hover:text-red-600
+                       disabled:opacity-40 disabled:pointer-events-none"
           >
-            {busyUndo ? (
-              <span className="w-3.5 h-3.5 border-2 border-gray-400/40 border-t-gray-300 rounded-full animate-spin block" />
-            ) : (
-              '−'
-            )}
+            {busyUndo ? <Loader2 size={15} className="animate-spin" /> : <Minus size={16} />}
           </button>
 
-          {/* Log / + button */}
           <button
             onClick={handleLog}
             disabled={!canLog || busyLog}
-            title={isOneTime && isCompleted ? 'Already done today' : 'Log action'}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg font-bold transition-all ${
+            aria-label="Log action"
+            title={isOneTime && isCompleted ? 'Already done' : 'Log action'}
+            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all active:scale-95 disabled:pointer-events-none ${
               isCompleted && isOneTime
-                ? 'bg-green-900/40 text-green-500 cursor-default'
-                : canLog
-                ? 'bg-brand-700 hover:bg-brand-600 text-white active:scale-95'
-                : 'bg-gray-800 text-gray-600 cursor-default'
+                ? 'bg-emerald-500/15 text-emerald-600'
+                : 'bg-accent-600 text-white hover:bg-accent-500 shadow-soft'
             }`}
           >
-            {busyLog ? (
-              <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin block" />
-            ) : isCompleted && isOneTime ? (
-              '✓'
-            ) : (
-              '+'
-            )}
+            {busyLog
+              ? <Loader2 size={15} className="animate-spin" />
+              : isCompleted && isOneTime ? <Check size={16} strokeWidth={3} /> : <Plus size={16} />}
           </button>
         </div>
-
       </div>
     </div>
   )

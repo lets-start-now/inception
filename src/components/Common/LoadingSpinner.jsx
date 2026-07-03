@@ -1,20 +1,14 @@
-export default function LoadingSpinner({ full }) {
-  if (full) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <Spinner />
-      </div>
-    )
-  }
-  return (
-    <div className="flex items-center justify-center py-12">
-      <Spinner />
+import { Loader2 } from 'lucide-react'
+
+export default function LoadingSpinner({ full, label }) {
+  const spinner = (
+    <div className="flex flex-col items-center gap-3 text-ink-400">
+      <Loader2 className="animate-spin text-accent-500" size={26} strokeWidth={2.5} />
+      {label && <p className="text-sm">{label}</p>}
     </div>
   )
-}
-
-function Spinner() {
-  return (
-    <div className="w-10 h-10 border-4 border-brand-700 border-t-brand-400 rounded-full animate-spin" />
-  )
+  if (full) {
+    return <div className="min-h-screen flex items-center justify-center bg-ink-950">{spinner}</div>
+  }
+  return <div className="flex items-center justify-center py-16">{spinner}</div>
 }

@@ -26,6 +26,7 @@ create table public.tasks (
   description      text default '',
   frequency        text not null default 'daily' check (frequency in ('daily', 'weekly')),
   type             text not null check (type in ('one-time', 'continuous')),
+  recoverable      boolean not null default false,  -- one-time only: false = required to finish day/week, true = optional if points met
   points_per_action integer not null default 10 check (points_per_action > 0),
   daily_threshold  integer not null default 1   check (daily_threshold > 0),  -- per-period threshold (week for weekly tasks)
   is_active        boolean default true,

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CalendarDays, CalendarRange, CheckCircle2, Inbox, CheckCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { logTaskAction, undoTaskAction } from '../../lib/taskLogic'
@@ -149,30 +150,28 @@ export default function TasksPage() {
     .filter((l) => weeklyTaskIds.has(l.task_id))
     .reduce((s, l) => s + l.points_earned, 0)
   // Mirror the daily rule: complete only when the points goal is met AND every
-  // continuous weekly task has reached its weekly threshold. Hitting the points
-  // number alone (without finishing the task thresholds) is not "complete".
-  const allWeeklyContinuousMet = weeklyTasks
-    .filter((t) => t.type === 'continuous')
+  // REQUIRED weekly task is done. Required = all continuous tasks + any
+  // non-recoverable one-time task. Recoverable one-time tasks never block.
+  const allWeeklyRequiredMet = weeklyTasks
+    .filter((t) => t.type === 'continuous' || (t.type === 'one-time' && t.recoverable === false))
     .every((t) => weekPeriodLog(t).is_completed)
-  const weekCompleted = weeklyTotal >= minWeeklyPoints && allWeeklyContinuousMet
+  const weekCompleted = weeklyTotal >= minWeeklyPoints && allWeeklyRequiredMet
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-black">Tasks</h1>
-        <p className="text-gray-500 text-sm">Track your daily and weekly goals</p>
+        <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
+        <p className="text-ink-400 text-sm mt-1">Track your daily and weekly goals</p>
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1 w-fit">
+      <div className="segmented">
         {['all', 'pending', 'done'].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
-              filter === f ? 'bg-brand-700 text-white' : 'text-gray-400 hover:text-gray-200'
-            }`}
+            className={`segmented-item capitalize ${filter === f ? 'segmented-item-active' : ''}`}
           >
             {f}
           </button>
@@ -187,12 +186,12 @@ export default function TasksPage() {
           {dailyTasks.length > 0 && (
             <section className="space-y-3">
               <SectionHeader
-                icon="📅"
+                icon={CalendarDays}
                 title="Daily"
                 done={dailyDone}
                 total={dailyTasks.length}
                 complete={dayCompleted}
-                completeLabel="Day Complete!"
+                completeLabel="Day complete"
               />
               <ProgressBar
                 label={`Daily goal: ${minPoints} pts`}
@@ -220,12 +219,12 @@ export default function TasksPage() {
           {weeklyTasks.length > 0 && (
             <section className="space-y-3">
               <SectionHeader
-                icon="🗓️"
+                icon={CalendarRange}
                 title="Weekly"
                 done={weeklyDone}
                 total={weeklyTasks.length}
                 complete={weekCompleted}
-                completeLabel="Week Complete!"
+                completeLabel="Week complete"
               />
               <ProgressBar
                 label={`Weekly goal: ${minWeeklyPoints} pts`}
@@ -253,10 +252,10 @@ export default function TasksPage() {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl font-semibold text-sm shadow-xl animate-slide-up ${
-          toast.type === 'success' ? 'bg-green-700 text-white'
-          : toast.type === 'warn'  ? 'bg-amber-700 text-white'
-          : 'bg-red-700 text-white'
+        <div className={`fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm shadow-elevated animate-slide-up border ${
+          toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          : toast.type === 'warn'  ? 'bg-amber-50 border-amber-200 text-amber-800'
+          : 'bg-red-50 border-red-200 text-red-800'
         }`}>
           {toast.msg}
         </div>
@@ -265,14 +264,19 @@ export default function TasksPage() {
   )
 }
 
-function SectionHeader({ icon, title, done, total, complete, completeLabel }) {
+function SectionHeader({ icon: Icon, title, done, total, complete, completeLabel }) {
   return (
     <div className="flex items-center justify-between">
-      <h2 className="font-bold text-gray-200 flex items-center gap-2">
-        <span>{icon}</span> {title}
-        <span className="text-gray-500 font-normal text-sm">{done}/{total} done</span>
+      <h2 className="font-semibold text-ink-100 flex items-center gap-2.5">
+        <Icon size={18} className="text-ink-400" />
+        {title}
+        <span className="text-ink-500 font-normal text-sm tabular-nums">{done}/{total}</span>
       </h2>
-      {complete && <span className="badge-green text-sm px-3 py-1">🎉 {completeLabel}</span>}
+      {complete && (
+        <span className="badge-green px-2.5 py-1 h-auto">
+          <CheckCircle2 size={13} /> {completeLabel}
+        </span>
+      )}
     </div>
   )
 }
@@ -280,15 +284,15 @@ function SectionHeader({ icon, title, done, total, complete, completeLabel }) {
 function ProgressBar({ label, value, max, complete }) {
   const pct = Math.min(100, Math.round((value / Math.max(1, max)) * 100))
   return (
-    <div className="card py-3">
-      <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-        <span>{label}</span>
-        <span>{value} pts · {pct}%</span>
+    <div className="card py-3.5">
+      <div className="flex justify-between text-xs mb-2">
+        <span className="text-ink-400 font-medium">{label}</span>
+        <span className="text-ink-300 tabular-nums">{value} pts · {pct}%</span>
       </div>
-      <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+      <div className="track h-2">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${complete ? 'bg-green-500' : 'bg-brand-500'}`}
-          style={{ width: `${Math.min(100, (value / Math.max(1, max)) * 100)}%` }}
+          className={`h-full rounded-full transition-all duration-500 ${complete ? 'bg-emerald-500' : 'bg-accent-500'}`}
+          style={{ width: `${pct}%` }}
         />
       </div>
     </div>
@@ -297,18 +301,21 @@ function ProgressBar({ label, value, max, complete }) {
 
 function EmptySection({ filter }) {
   return (
-    <div className="card text-center text-gray-500 py-8">
-      No {filter === 'all' ? '' : filter + ' '}tasks here.
+    <div className="surface-2 flex flex-col items-center text-center text-ink-500 py-8 px-4">
+      <CheckCheck size={22} className="text-ink-600 mb-2" />
+      <p className="text-sm">No {filter === 'all' ? '' : filter + ' '}tasks here.</p>
     </div>
   )
 }
 
 function EmptyState() {
   return (
-    <div className="card text-center py-16">
-      <div className="text-5xl mb-3">📭</div>
-      <p className="text-gray-400 font-semibold">No tasks yet</p>
-      <p className="text-gray-600 text-sm mt-1">Ask an admin to create some tasks.</p>
+    <div className="card flex flex-col items-center text-center py-16">
+      <div className="w-14 h-14 rounded-2xl bg-ink-800 flex items-center justify-center mb-4">
+        <Inbox size={26} className="text-ink-500" />
+      </div>
+      <p className="font-semibold text-ink-200">No tasks yet</p>
+      <p className="text-ink-500 text-sm mt-1">Ask an admin to create some tasks.</p>
     </div>
   )
 }

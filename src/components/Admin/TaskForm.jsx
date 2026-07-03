@@ -5,6 +5,7 @@ const DEFAULTS = {
   description:       '',
   frequency:         'daily',
   type:              'one-time',
+  recoverable:       false,  // one-time only: false = required, true = optional
   points_per_action: '10',   // keep as string while editing
   daily_threshold:   '1',
   is_active:         true,
@@ -14,6 +15,7 @@ function toFormValues(task) {
   return {
     ...task,
     frequency:         task.frequency ?? 'daily',
+    recoverable:       task.recoverable ?? false,
     points_per_action: String(task.points_per_action ?? 10),
     daily_threshold:   String(task.daily_threshold   ?? 1),
   }
@@ -49,6 +51,8 @@ export default function TaskForm({ initial, onSubmit, onCancel, busy }) {
     onSubmit({
       ...form,
       frequency:         form.frequency === 'weekly' ? 'weekly' : 'daily',
+      // recoverable only applies to one-time tasks; continuous stays required.
+      recoverable:       form.type === 'one-time' ? !!form.recoverable : false,
       points_per_action: points,
       daily_threshold:   form.type === 'continuous' ? thresh : 1,
     })
@@ -77,7 +81,7 @@ export default function TaskForm({ initial, onSubmit, onCancel, busy }) {
       <div>
         <label className="label">Description</label>
         <textarea
-          className="input resize-none"
+          className="textarea"
           rows={2}
           value={form.description}
           onChange={set('description')}
@@ -89,14 +93,14 @@ export default function TaskForm({ initial, onSubmit, onCancel, busy }) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="label">Frequency *</label>
-          <select className="input" value={form.frequency} onChange={set('frequency')}>
+          <select className="select" value={form.frequency} onChange={set('frequency')}>
             <option value="daily">Daily (resets each day)</option>
             <option value="weekly">Weekly (resets each week)</option>
           </select>
         </div>
         <div>
           <label className="label">Type *</label>
-          <select className="input" value={form.type} onChange={set('type')}>
+          <select className="select" value={form.type} onChange={set('type')}>
             <option value="one-time">One-time (once / {period})</option>
             <option value="continuous">Continuous (multiple / {period})</option>
           </select>
@@ -130,7 +134,7 @@ export default function TaskForm({ initial, onSubmit, onCancel, busy }) {
         <div>
           <label className="label">
             {isWeekly ? 'Weekly' : 'Daily'} Threshold
-            <span className="text-gray-600 font-normal ml-1">
+            <span className="text-ink-500 font-normal ml-1">
               (actions per {period} needed to mark complete)
             </span>
           </label>
@@ -151,6 +155,29 @@ export default function TaskForm({ initial, onSubmit, onCancel, busy }) {
         </div>
       )}
 
+      {/* Recoverable (one-time only) */}
+      {form.type === 'one-time' && (
+        <div>
+          <label className="label">
+            Completion requirement
+            <span className="text-ink-500 font-normal ml-1">(one-time tasks)</span>
+          </label>
+          <select
+            className="select"
+            value={form.recoverable ? 'true' : 'false'}
+            onChange={(e) => setForm((f) => ({ ...f, recoverable: e.target.value === 'true' }))}
+          >
+            <option value="false">Non-recoverable — required to finish the {period}</option>
+            <option value="true">Recoverable — optional if the points goal is met</option>
+          </select>
+          <p className="hint mt-0">
+            {form.recoverable
+              ? `Skipping this is OK as long as the ${isWeekly ? 'weekly' : 'daily'} points goal is reached.`
+              : `The ${period} won't count as complete unless this is done, even if points are reached.`}
+          </p>
+        </div>
+      )}
+
       {/* Active toggle */}
       <div className="flex items-center gap-3">
         <input
@@ -160,30 +187,38 @@ export default function TaskForm({ initial, onSubmit, onCancel, busy }) {
           onChange={set('is_active')}
           className="w-4 h-4 accent-brand-500"
         />
-        <label htmlFor="is_active" className="text-sm text-gray-300 cursor-pointer">
+        <label htmlFor="is_active" className="text-sm text-ink-200 cursor-pointer">
           Active (visible to users)
         </label>
       </div>
 
       {/* Live preview */}
-      <div className="bg-gray-800/50 rounded-lg px-4 py-3 text-xs text-gray-400 space-y-0.5">
-        <p className="font-semibold text-gray-300 mb-1">Preview</p>
-        <p>Frequency: <span className="text-brand-400">{form.frequency}</span></p>
-        <p>Type: <span className="text-brand-400">{form.type}</span></p>
-        <p>Points: <span className="text-brand-400">+{ptsNum || '—'} per action</span></p>
+      <div className="surface-2 px-4 py-3 text-xs text-ink-400 space-y-1">
+        <p className="font-semibold text-ink-200 mb-1.5">Preview</p>
+        <p>Frequency: <span className="text-accent-600 capitalize">{form.frequency}</span></p>
+        <p>Type: <span className="text-accent-600">{form.type}</span></p>
+        {form.type === 'one-time' && (
+          <p>
+            Requirement:{' '}
+            <span className={form.recoverable ? 'text-ink-300' : 'text-amber-600'}>
+              {form.recoverable ? 'Recoverable (optional)' : 'Non-recoverable (required)'}
+            </span>
+          </p>
+        )}
+        <p>Points: <span className="text-accent-600 tabular-nums">+{ptsNum || '—'} per action</span></p>
         {form.type === 'continuous' && threshNum > 0 && (
           <p>
             Complete at:{' '}
-            <span className="text-brand-400">{threshNum} actions / {period}</span>
+            <span className="text-accent-600 tabular-nums">{threshNum} actions / {period}</span>
             {' '}(= {threshNum * ptsNum} pts minimum)
           </p>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-3 pt-1">
         <button type="submit" className="btn-primary flex-1" disabled={busy}>
-          {busy ? 'Saving…' : initial ? 'Save Changes' : 'Create Task'}
+          {busy ? 'Saving…' : initial ? 'Save changes' : 'Create task'}
         </button>
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Cancel
