@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard/Dashboard'
 import TasksPage from './components/Tasks/TasksPage'
 import Leaderboard from './components/Leaderboard/Leaderboard'
 import ContributionGraph from './components/Graph/ContributionGraph'
+import ProfilePage from './components/Profile/ProfilePage'
 import AdminPanel from './components/Admin/AdminPanel'
 import LoadingSpinner from './components/Common/LoadingSpinner'
 
@@ -55,6 +56,7 @@ function AppRoutes() {
           <Route path="/tasks"       element={<TasksPage />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/graph"       element={<ContributionGraph />} />
+          <Route path="/profile/:userId" element={<ProfilePage />} />
           {profile?.role === 'admin' && (
             <Route path="/admin" element={<AdminPanel />} />
           )}

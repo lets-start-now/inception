@@ -1,7 +1,8 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { Zap, Shield, LogOut } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { navItems } from './nav'
+import Avatar from '../Common/Avatar'
 
 export default function Sidebar() {
   const { profile, signOut } = useAuth()
@@ -52,19 +53,23 @@ export default function Sidebar() {
 
       {/* User footer */}
       <div className="p-3 border-t border-ink-800">
-        <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-ink-800 transition-colors">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center text-sm font-semibold text-white shrink-0">
-            {profile?.username?.[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-ink-100 truncate">{profile?.username}</p>
-            <p className="text-xs text-ink-500 capitalize">{profile?.role ?? 'user'}</p>
-          </div>
+        <div className="flex items-center gap-1 p-1 rounded-xl hover:bg-ink-800 transition-colors">
+          <Link
+            to={profile ? `/profile/${profile.id}` : '#'}
+            className="flex items-center gap-3 p-1 rounded-lg flex-1 min-w-0"
+            title="View your profile"
+          >
+            <Avatar username={profile?.username} avatarUrl={profile?.avatar_url} size={36} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-ink-100 truncate">{profile?.username}</p>
+              <p className="text-xs text-ink-500 capitalize">{profile?.role ?? 'user'}</p>
+            </div>
+          </Link>
           <button
             onClick={handleSignOut}
             aria-label="Sign out"
             title="Sign out"
-            className="icon-btn hover:text-red-600"
+            className="icon-btn hover:text-red-600 shrink-0"
           >
             <LogOut size={16} />
           </button>

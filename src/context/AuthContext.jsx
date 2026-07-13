@@ -125,8 +125,15 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut()
   }
 
+  // Merge a partial update into the in-memory profile (e.g. after an avatar
+  // upload) without a full re-fetch — avoids flashing the loading spinner
+  // for a change we already know the result of.
+  function patchProfile(partial) {
+    setProfile((prev) => (prev ? { ...prev, ...partial } : prev))
+  }
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, authError, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, authError, signIn, signUp, signOut, patchProfile }}>
       {children}
     </AuthContext.Provider>
   )

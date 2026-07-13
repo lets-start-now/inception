@@ -1,8 +1,9 @@
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Zap, LogOut, Check } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { titleForPath } from './nav'
+import Avatar from '../Common/Avatar'
 
 export default function Topbar() {
   const { totalPoints, minPoints, dayCompleted } = useApp()
@@ -47,9 +48,9 @@ export default function Topbar() {
 
           {/* Mobile user + sign out */}
           <div className="flex lg:hidden items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center text-xs font-semibold text-white">
-              {profile?.username?.[0]?.toUpperCase() ?? '?'}
-            </div>
+            <Link to={profile ? `/profile/${profile.id}` : '#'} aria-label="View your profile">
+              <Avatar username={profile?.username} avatarUrl={profile?.avatar_url} size={32} />
+            </Link>
             <button onClick={handleSignOut} aria-label="Sign out" className="icon-btn hover:text-red-600">
               <LogOut size={16} />
             </button>

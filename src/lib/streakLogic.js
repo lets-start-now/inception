@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import { today, daysBetween, toDateStr } from './dateUtils'
 import { subDays } from 'date-fns'
 
-const HABIT_THRESHOLD        = 40  // days to become a habit
+export const HABIT_THRESHOLD = 40  // days to become a habit
 const HABIT_BREAK_CONSEC     = 3   // consecutive misses to break habit
 const HABIT_BREAK_IN_30      = 6   // misses in last 30 days to break habit
 

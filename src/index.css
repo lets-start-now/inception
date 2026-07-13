@@ -3,7 +3,13 @@
 @tailwind utilities;
 
 @layer base {
-  html { -webkit-tap-highlight-color: transparent; }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    /* Always reserve the scrollbar's space so content that grows/shrinks
+       the page height (e.g. the Activity hover detail card) never shifts
+       the whole layout sideways when the scrollbar appears/disappears. */
+    scrollbar-gutter: stable;
+  }
 
   body {
     @apply bg-ink-950 text-ink-100 antialiased font-sans;

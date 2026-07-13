@@ -11,6 +11,8 @@ import { fetchUserStreaks } from '../../lib/streakLogic'
 import { today } from '../../lib/dateUtils'
 import { fetchLeaderForDate } from '../../lib/taskLogic'
 import TashkentClock from '../Common/TashkentClock'
+import StatCard from '../Common/StatCard'
+import StreakList from '../Common/StreakList'
 
 export default function Dashboard() {
   const { profile } = useAuth()
@@ -90,7 +92,7 @@ export default function Dashboard() {
 
       {/* Leader spotlight */}
       {leader && (
-        <div className="card flex items-center gap-4">
+        <Link to={`/profile/${leader.user_id}`} className="card card-interactive flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-amber-500/12 border border-amber-500/25 flex items-center justify-center shrink-0">
             <Crown size={20} className="text-amber-600" />
           </div>
@@ -101,7 +103,7 @@ export default function Dashboard() {
           <span className="font-semibold text-amber-600 tabular-nums shrink-0">
             {leader.total_points.toLocaleString()} pts
           </span>
-        </div>
+        </Link>
       )}
 
       {/* Quick actions */}
@@ -112,34 +114,7 @@ export default function Dashboard() {
           subtitle="View your history" />
       </div>
 
-      {/* Streaks */}
-      {streaks.length > 0 && (
-        <div className="card">
-          <h2 className="font-semibold mb-1">Streaks &amp; habits</h2>
-          <p className="text-xs text-ink-500 mb-4">Your active momentum</p>
-          <div className="divide-y divide-ink-800">
-            {streaks.map((s) => (
-              <div key={s.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    s.is_habit ? 'bg-violet-500/12 text-violet-600' : 'bg-amber-500/12 text-amber-600'
-                  }`}>
-                    {s.is_habit ? <Brain size={16} /> : <Flame size={16} />}
-                  </div>
-                  <span className="text-sm font-medium truncate">{s.tasks?.title}</span>
-                  {s.is_habit && <span className="badge-purple">Habit</span>}
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  {!s.is_habit && (
-                    <span className="text-sm font-semibold text-amber-600 tabular-nums">{s.current_streak}d</span>
-                  )}
-                  <span className="text-xs text-ink-500">best {s.longest_streak}d</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <StreakList streaks={streaks} subtitle="Your active momentum" />
     </div>
   )
 }
@@ -163,25 +138,6 @@ function ProgressRing({ value, max, complete }) {
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-xl font-bold tabular-nums">{Math.round(pct)}%</span>
       </div>
-    </div>
-  )
-}
-
-const TINTS = {
-  emerald: 'bg-emerald-500/12 text-emerald-600',
-  amber:   'bg-amber-500/12 text-amber-600',
-  violet:  'bg-violet-500/12 text-violet-600',
-  accent:  'bg-accent-500/12 text-accent-600',
-}
-
-function StatCard({ icon: Icon, tint, label, value }) {
-  return (
-    <div className="card card-interactive p-4">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${TINTS[tint]}`}>
-        <Icon size={18} />
-      </div>
-      <div className="text-2xl font-bold tabular-nums">{value}</div>
-      <div className="text-xs text-ink-500 mt-0.5">{label}</div>
     </div>
   )
 }

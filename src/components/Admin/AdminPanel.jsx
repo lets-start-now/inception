@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Power, Inbox } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Plus, Pencil, Trash2, Power, Inbox, UserCircle } from 'lucide-react'
+import Avatar from '../Common/Avatar'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -275,19 +277,20 @@ export default function AdminPanel() {
         <div className="card p-2">
           {users.map((u) => (
             <div key={u.id} className="flex items-center justify-between px-3 py-3 rounded-xl hover:bg-ink-800/60 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center text-sm font-semibold text-white shrink-0">
-                  {u.username[0].toUpperCase()}
-                </div>
+              <Link to={`/profile/${u.id}`} className="flex items-center gap-3 min-w-0 group">
+                <Avatar username={u.username} avatarUrl={u.avatar_url} size={36} />
                 <div className="min-w-0">
-                  <p className="font-medium text-sm text-ink-100 truncate">{u.username}</p>
+                  <p className="font-medium text-sm text-ink-100 truncate group-hover:text-accent-700 transition-colors">{u.username}</p>
                   <p className="text-xs text-ink-500">Joined {new Date(u.created_at).toLocaleDateString()}</p>
                 </div>
-              </div>
+              </Link>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={u.role === 'admin' ? 'badge-amber' : 'badge-gray'}>
                   {u.role}
                 </span>
+                <Link to={`/profile/${u.id}`} aria-label="View profile" title="View profile" className="icon-btn">
+                  <UserCircle size={16} />
+                </Link>
                 {u.id !== profile.id && (
                   <button onClick={() => toggleRole(u)} className="btn-ghost btn-sm">
                     Toggle role

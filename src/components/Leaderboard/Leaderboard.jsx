@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Crown, Trophy, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { today } from '../../lib/dateUtils'
 import { format, subDays, parseISO } from 'date-fns'
+import Avatar from '../Common/Avatar'
 
 const periods = [
   { key: 'today', label: 'Today'    },
@@ -34,7 +36,7 @@ export default function Leaderboard() {
     // Fetch every user so those with 0 points (or no activity yet) still appear.
     const [{ data: sums }, { data: profs }] = await Promise.all([
       sumQuery,
-      supabase.from('profiles').select('id, username'),
+      supabase.from('profiles').select('id, username, avatar_url'),
     ])
 
     const agg = {}
@@ -47,6 +49,7 @@ export default function Leaderboard() {
     const entries = (profs ?? []).map((p) => ({
       user_id:     p.id,
       username:    p.username,
+      avatar_url:  p.avatar_url,
       total:       agg[p.id]?.total ?? 0,
       leader_days: agg[p.id]?.leader_days ?? 0,
     }))
@@ -100,22 +103,26 @@ export default function Leaderboard() {
           {entries.map((entry, i) => {
             const isMe = entry.user_id === profile?.id
             return (
-              <div
+              <Link
                 key={entry.user_id}
+                to={`/profile/${entry.user_id}`}
                 className={`flex items-center gap-4 px-3 py-3 rounded-xl transition-colors ${
-                  isMe ? 'bg-accent-500/10' : 'hover:bg-ink-800/60'
+                  isMe ? 'bg-accent-500/10 hover:bg-accent-500/15' : 'hover:bg-ink-800/60'
                 }`}
               >
                 <Rank index={i} />
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 ${
-                    i === 0 ? 'bg-amber-500/15 text-amber-700'
-                    : i === 1 ? 'bg-ink-700 text-ink-200'
-                    : i === 2 ? 'bg-orange-500/15 text-orange-700'
-                    : 'bg-ink-800 text-ink-400'
-                  }`}>
-                    {entry.username[0].toUpperCase()}
-                  </div>
+                  <Avatar
+                    username={entry.username}
+                    avatarUrl={entry.avatar_url}
+                    size={36}
+                    fallbackClassName={
+                      i === 0 ? 'bg-amber-500/15 text-amber-700'
+                      : i === 1 ? 'bg-ink-700 text-ink-200'
+                      : i === 2 ? 'bg-orange-500/15 text-orange-700'
+                      : 'bg-ink-800 text-ink-400'
+                    }
+                  />
                   <div className="min-w-0">
                     <p className={`font-medium truncate ${isMe ? 'text-accent-700' : 'text-ink-100'}`}>
                       {entry.username}
@@ -134,7 +141,7 @@ export default function Leaderboard() {
                   {entry.total.toLocaleString()}
                   <span className="text-ink-500 font-normal text-sm"> pts</span>
                 </span>
-              </div>
+              </Link>
             )
           })}
         </div>
