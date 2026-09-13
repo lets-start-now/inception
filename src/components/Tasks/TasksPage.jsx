@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { CalendarDays, CalendarRange, CheckCircle2, Inbox, CheckCheck } from 'lucide-react'
+import { CalendarDays, CalendarRange, CheckCircle2, Inbox, CheckCheck, Clock } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { logTaskAction, undoTaskAction } from '../../lib/taskLogic'
-import { today } from '../../lib/dateUtils'
+import { today, yesterday } from '../../lib/dateUtils'
 import TaskCard from './TaskCard'
 
 const freqOf = (t) => (t.frequency === 'weekly' ? 'weekly' : 'daily')
@@ -13,13 +13,15 @@ export default function TasksPage() {
   const {
     tasks, weekLogs, logMap, totalPoints, minPoints, dayCompleted, minWeeklyPoints,
     syncToday, setWeekLogs, setTodaySummary,
+    isTaskActiveOn, getSchedule, setTaskSchedule, overrideTaskToday, isHabitAtRisk,
   } = useApp()
-  const [filter, setFilter] = useState('all')   // 'all' | 'pending' | 'done'
+  const [filter, setFilter] = useState('all')
   const [toast,  setToast]  = useState(null)
 
-  const todayStr = today()
+  const todayStr     = today()
+  const yesterdayStr = yesterday()
 
-  // ── Week aggregates (for weekly tasks) ───────────────────────────
+  // ── Week aggregates (for weekly tasks) ───────────────────────────────────
   function weekAgg(taskId) {
     let count = 0, points = 0
     for (const l of weekLogs) {
@@ -27,8 +29,7 @@ export default function TasksPage() {
     }
     return { count, points }
   }
-  // A weekly task's "period log" mirrors the shape TaskCard expects, but
-  // aggregated across the whole Mon–Sun week.
+
   function weekPeriodLog(task) {
     const { count, points } = weekAgg(task.id)
     return {
@@ -37,88 +38,89 @@ export default function TasksPage() {
       is_completed:  task.type === 'one-time' ? count >= 1 : count >= task.daily_threshold,
     }
   }
-  // The log shown on a card: today's row for daily, week aggregate for weekly.
+
   const periodLog = (task) => (freqOf(task) === 'weekly' ? weekPeriodLog(task) : logMap[task.id])
 
-  // ── Optimistic local updates (canonical store = weekLogs) ────────
-  function upsertTodayRow(prev, task, delta) {
-    const idx = prev.findIndex((l) => l.task_id === task.id && l.log_date === todayStr)
+  // ── Optimistic helpers ────────────────────────────────────────────────────
+  function upsertLogRow(prev, task, delta, dateStr) {
+    const idx = prev.findIndex((l) => l.task_id === task.id && l.log_date === dateStr)
     const cur = idx >= 0
       ? prev[idx]
-      : { task_id: task.id, log_date: todayStr, action_count: 0, points_earned: 0, is_completed: false }
-    const newCount  = Math.max(0, cur.action_count + delta)
-    const newPoints = Math.max(0, cur.points_earned + delta * task.points_per_action)
-    const isCompleted = task.type === 'one-time' ? delta > 0 : newCount >= task.daily_threshold
-    const updated = { ...cur, action_count: newCount, points_earned: newPoints, is_completed: isCompleted }
-    if (idx >= 0) { const copy = [...prev]; copy[idx] = updated; return copy }
+      : { task_id: task.id, log_date: dateStr, action_count: 0, points_earned: 0, is_completed: false }
+    const newCount   = Math.max(0, cur.action_count + delta)
+    const newPoints  = Math.max(0, cur.points_earned + delta * task.points_per_action)
+    const completed  = task.type === 'one-time' ? delta > 0 : newCount >= task.daily_threshold
+    const updated    = { ...cur, action_count: newCount, points_earned: newPoints, is_completed: completed }
+    if (idx >= 0) { const c = [...prev]; c[idx] = updated; return c }
     return [...prev, updated]
   }
 
-  function applyOptimistic(task, delta) {
-    setWeekLogs((prev) => upsertTodayRow(prev, task, delta))
-    // Only daily tasks feed the daily points total.
-    if (freqOf(task) === 'daily') {
-      setTodaySummary((s) => ({
-        ...(s ?? {}),
-        total_points: Math.max(0, (s?.total_points ?? 0) + delta * task.points_per_action),
-      }))
-    }
-  }
-
-  function applyServerState(task, log, summary) {
-    if (log && log.task_id) {
-      setWeekLogs((prev) => {
-        const idx = prev.findIndex((l) => l.task_id === log.task_id && l.log_date === log.log_date)
-        if (idx >= 0) { const copy = [...prev]; copy[idx] = log; return copy }
-        return [...prev, log]
-      })
-    }
-    if (freqOf(task) === 'daily' && summary) setTodaySummary(summary)
-  }
-
-  // ── Handlers ─────────────────────────────────────────────────────
-  async function handleLog(task) {
-    const freq = freqOf(task)
+  // ── Handlers (work for both today and yesterday) ──────────────────────────
+  async function handleLog(task, dateStr = todayStr) {
     if (task.type === 'one-time') {
-      const done = freq === 'weekly' ? weekAgg(task.id).count >= 1 : logMap[task.id]?.is_completed
-      if (done) {
-        showToast(`Already completed ${freq === 'weekly' ? 'this week' : 'today'}!`, 'warn')
-        return
+      const logForDate = weekLogs.find((l) => l.task_id === task.id && l.log_date === dateStr)
+      if (dateStr === todayStr) {
+        const done = freqOf(task) === 'weekly' ? weekAgg(task.id).count >= 1 : logMap[task.id]?.is_completed
+        if (done) { showToast(`Already completed!`, 'warn'); return }
+      } else {
+        if (logForDate?.is_completed) { showToast('Already completed for that day!', 'warn'); return }
       }
     }
 
-    applyOptimistic(task, +1)
+    setWeekLogs((prev) => upsertLogRow(prev, task, +1, dateStr))
+    if (dateStr === todayStr && freqOf(task) === 'daily') {
+      setTodaySummary((s) => ({
+        ...(s ?? {}),
+        total_points: Math.max(0, (s?.total_points ?? 0) + task.points_per_action),
+      }))
+    }
     showToast(`+${task.points_per_action} pts earned!`, 'success')
-    const { error, blocked, log, summary } = await logTaskAction(profile.id, task, todayStr)
+
+    const { error, blocked, log, summary } = await logTaskAction(profile.id, task, dateStr)
     if (blocked) {
-      showToast('Already completed!', 'warn')
-      syncToday()
+      showToast('Already completed!', 'warn'); syncToday()
     } else if (error) {
-      console.error('logTaskAction failed:', error)
-      showToast(`Save failed: ${error.message ?? 'unknown error'}`, 'error')
-      syncToday()
+      showToast(`Save failed: ${error.message ?? 'unknown error'}`, 'error'); syncToday()
     } else {
-      applyServerState(task, log, summary)
+      if (log?.task_id) {
+        setWeekLogs((prev) => {
+          const idx = prev.findIndex((l) => l.task_id === log.task_id && l.log_date === log.log_date)
+          if (idx >= 0) { const c = [...prev]; c[idx] = log; return c }
+          return [...prev, log]
+        })
+      }
+      if (freqOf(task) === 'daily' && summary && dateStr === todayStr) setTodaySummary(summary)
     }
   }
 
-  async function handleUndo(task) {
-    // Undo only removes an action logged *today*.
-    const todayRow = weekLogs.find((l) => l.task_id === task.id && l.log_date === todayStr)
-    if (!todayRow || todayRow.action_count === 0) {
+  async function handleUndo(task, dateStr = todayStr) {
+    const logForDate = weekLogs.find((l) => l.task_id === task.id && l.log_date === dateStr)
+    if (!logForDate || logForDate.action_count === 0) {
       showToast(freqOf(task) === 'weekly' ? 'Nothing logged today to undo' : 'Nothing to undo', 'warn')
       return
     }
 
-    applyOptimistic(task, -1)
-    const { error, log, summary } = await undoTaskAction(profile.id, task, todayStr)
+    setWeekLogs((prev) => upsertLogRow(prev, task, -1, dateStr))
+    if (dateStr === todayStr && freqOf(task) === 'daily') {
+      setTodaySummary((s) => ({
+        ...(s ?? {}),
+        total_points: Math.max(0, (s?.total_points ?? 0) - task.points_per_action),
+      }))
+    }
+
+    const { error, log, summary } = await undoTaskAction(profile.id, task, dateStr)
     if (error) {
-      console.error('undoTaskAction failed:', error)
-      showToast(`Save failed: ${error.message ?? 'unknown error'}`, 'error')
-      syncToday()
+      showToast(`Save failed: ${error.message ?? 'unknown error'}`, 'error'); syncToday()
     } else {
       showToast('Action removed.', 'warn')
-      applyServerState(task, log, summary)
+      if (log?.task_id) {
+        setWeekLogs((prev) => {
+          const idx = prev.findIndex((l) => l.task_id === log.task_id && l.log_date === log.log_date)
+          if (idx >= 0) { const c = [...prev]; c[idx] = log; return c }
+          return [...prev, log]
+        })
+      }
+      if (freqOf(task) === 'daily' && summary && dateStr === todayStr) setTodaySummary(summary)
     }
   }
 
@@ -127,9 +129,13 @@ export default function TasksPage() {
     setTimeout(() => setToast(null), 2500)
   }
 
-  // ── Split tasks + filter ─────────────────────────────────────────
+  // ── Task splits ───────────────────────────────────────────────────────────
   const dailyTasks  = tasks.filter((t) => freqOf(t) === 'daily')
   const weeklyTasks = tasks.filter((t) => freqOf(t) === 'weekly')
+
+  // Active/passive split for today's daily tasks
+  const activeDailyTasks  = dailyTasks.filter((t) =>  isTaskActiveOn(t.id, todayStr))
+  const passiveDailyTasks = dailyTasks.filter((t) => !isTaskActiveOn(t.id, todayStr))
 
   function applyFilter(list) {
     return list.filter((t) => {
@@ -139,23 +145,30 @@ export default function TasksPage() {
       return true
     })
   }
-  const dailyFiltered  = applyFilter(dailyTasks)
-  const weeklyFiltered = applyFilter(weeklyTasks)
 
-  const dailyDone  = dailyTasks.filter((t) => logMap[t.id]?.is_completed).length
-  const weeklyDone = weeklyTasks.filter((t) => weekPeriodLog(t).is_completed).length
+  const activeFiltered  = applyFilter(activeDailyTasks)
+  const weeklyFiltered  = applyFilter(weeklyTasks)
+
+  const dailyDone   = activeDailyTasks.filter((t) => logMap[t.id]?.is_completed).length
+  const weeklyDone  = weeklyTasks.filter((t) => weekPeriodLog(t).is_completed).length
 
   const weeklyTaskIds = new Set(weeklyTasks.map((t) => t.id))
   const weeklyTotal   = weekLogs
     .filter((l) => weeklyTaskIds.has(l.task_id))
     .reduce((s, l) => s + l.points_earned, 0)
-  // Mirror the daily rule: complete only when the points goal is met AND every
-  // REQUIRED weekly task is done. Required = all continuous tasks + any
-  // non-recoverable one-time task. Recoverable one-time tasks never block.
   const allWeeklyRequiredMet = weeklyTasks
     .filter((t) => t.type === 'continuous' || (t.type === 'one-time' && t.recoverable === false))
     .every((t) => weekPeriodLog(t).is_completed)
   const weekCompleted = weeklyTotal >= minWeeklyPoints && allWeeklyRequiredMet
+
+  // ── Yesterday catch-up ────────────────────────────────────────────────────
+  const yesterdayLogMap = weekLogs
+    .filter((l) => l.log_date === yesterdayStr)
+    .reduce((m, l) => { m[l.task_id] = l; return m }, {})
+
+  const yesterdayCatchup = dailyTasks
+    .filter((t) => isTaskActiveOn(t.id, yesterdayStr))
+    .filter((t) => !yesterdayLogMap[t.id]?.is_completed)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -182,14 +195,41 @@ export default function TasksPage() {
         <EmptyState />
       ) : (
         <>
-          {/* ── DAILY ────────────────────────────────────────────── */}
+          {/* ── YESTERDAY CATCH-UP ─────────────────────────────────── */}
+          {yesterdayCatchup.length > 0 && filter !== 'done' && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-ink-100 flex items-center gap-2.5">
+                  <Clock size={18} className="text-amber-500" />
+                  Yesterday
+                  <span className="text-ink-500 font-normal text-sm tabular-nums">
+                    {yesterdayCatchup.length} missed
+                  </span>
+                </h2>
+                <span className="text-xs text-amber-600 font-medium">Catch-up window</span>
+              </div>
+              {yesterdayCatchup.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  log={yesterdayLogMap[task.id]}
+                  onLog={(t) => handleLog(t, yesterdayStr)}
+                  onUndo={(t) => handleUndo(t, yesterdayStr)}
+                  schedule={getSchedule(task.id)}
+                  onScheduleChange={(days) => setTaskSchedule(task.id, days)}
+                />
+              ))}
+            </section>
+          )}
+
+          {/* ── DAILY ──────────────────────────────────────────────── */}
           {dailyTasks.length > 0 && (
             <section className="space-y-3">
               <SectionHeader
                 icon={CalendarDays}
                 title="Daily"
                 done={dailyDone}
-                total={dailyTasks.length}
+                total={activeDailyTasks.length}
                 complete={dayCompleted}
                 completeLabel="Day complete"
               />
@@ -199,23 +239,47 @@ export default function TasksPage() {
                 max={minPoints}
                 complete={dayCompleted}
               />
-              {dailyFiltered.length === 0 ? (
+
+              {/* Active tasks */}
+              {activeFiltered.length === 0 && passiveDailyTasks.length === 0 ? (
                 <EmptySection filter={filter} />
               ) : (
-                dailyFiltered.map((task) => (
+                activeFiltered.map((task) => (
                   <TaskCard
                     key={task.id}
                     task={task}
                     log={logMap[task.id]}
                     onLog={handleLog}
                     onUndo={handleUndo}
+                    isAtRisk={isHabitAtRisk(task.id)}
+                    schedule={getSchedule(task.id)}
+                    onScheduleChange={(days) => setTaskSchedule(task.id, days)}
                   />
                 ))
+              )}
+
+              {/* Passive tasks — always shown (filter doesn't apply: they're not "done") */}
+              {passiveDailyTasks.length > 0 && filter !== 'done' && (
+                <div className="space-y-2">
+                  {passiveDailyTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      log={logMap[task.id]}
+                      onLog={handleLog}
+                      onUndo={handleUndo}
+                      isPassive
+                      onActivate={() => overrideTaskToday(task.id, true)}
+                      schedule={getSchedule(task.id)}
+                      onScheduleChange={(days) => setTaskSchedule(task.id, days)}
+                    />
+                  ))}
+                </div>
               )}
             </section>
           )}
 
-          {/* ── WEEKLY ───────────────────────────────────────────── */}
+          {/* ── WEEKLY ─────────────────────────────────────────────── */}
           {weeklyTasks.length > 0 && (
             <section className="space-y-3">
               <SectionHeader
